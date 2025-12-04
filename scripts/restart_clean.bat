@@ -1,14 +1,16 @@
 @echo off
-chcp 65001 >nul
-
-REM 加载环境配置
-call "%~dp0setup_env.bat"
-if errorlevel 1 exit /b 1
-
 echo ========================================
-echo  强制重启所有 PAG 服务器
+echo 强制重启所有 PAG 服务器
 echo ========================================
 echo.
+
+call "%~dp0setup_env.bat"
+if errorlevel 1 (
+    echo.
+    echo 环境配置失败！
+    pause
+    exit /b 1
+)
 
 echo [1/4] 关闭所有旧的 Python 服务器进程...
 taskkill /F /FI "WINDOWTITLE eq PAG Export Server*" 2>nul
@@ -26,7 +28,7 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8000') do (
 )
 timeout /t 2 >nul
 
-echo [3/4] 启动导出服务器（新配置：100MB 限制）...
+echo [3/4] 启动导出服务器...
 start "PAG Export Server" cmd /c "set PYTHONPATH=%PAG_LIBPATH% && cd /d %~dp0..\core && %PYTHON% pag_export_server.py"
 timeout /t 3 >nul
 
@@ -36,20 +38,18 @@ timeout /t 2 >nul
 
 echo.
 echo ========================================
-echo  ✅ 所有服务器已重启！
+echo 所有服务器已重启！
 echo ========================================
 echo.
-echo  导出服务器: http://localhost:5000
-echo  最大文件: 100 MB（新配置）
-echo  Web 编辑器: http://localhost:8000/pag_template_editor.html
+echo 导出服务器: http://localhost:5000
+echo 编辑器地址: http://localhost:8000/pag_template_editor.html
 echo.
-echo  请按任意键打开浏览器...
+echo 请按任意键打开浏览器...
 pause >nul
 
 start http://localhost:8000/pag_template_editor.html
 
 echo.
-echo  浏览器已打开！
-echo  请按 Ctrl+F5 强制刷新页面
+echo 浏览器已打开！
 echo.
 pause

@@ -7,7 +7,24 @@ REM Set project root directory
 set "PROJECT_ROOT=%~dp0.."
 
 REM Set pypag library path
-set "PAG_LIBPATH=%PROJECT_ROOT%\lib"
+REM Check if PYPAG_PATH environment variable is set (for custom pypag location)
+if defined PYPAG_PATH (
+    set "PAG_LIBPATH=%PYPAG_PATH%"
+) else (
+    REM Try project lib directory first
+    if exist "%PROJECT_ROOT%\lib\pypag.pyd" (
+        set "PAG_LIBPATH=%PROJECT_ROOT%\lib"
+    ) else (
+        REM Fallback to original pypag location
+        set "PAG_LIBPATH=H:\work\python\libpag\python\venv\Lib\site-packages"
+    )
+)
+
+REM Add pypag DLL directory to PATH for dependency resolution
+set "PATH=%PAG_LIBPATH%\pypag;%PAG_LIBPATH%;%PATH%"
+
+REM Set PYTHONPATH to include lib directory
+set "PYTHONPATH=%PAG_LIBPATH%;%PYTHONPATH%"
 
 REM Set Python interpreter path
 REM Priority: PYTHON_EXE environment variable > Common paths > System PATH

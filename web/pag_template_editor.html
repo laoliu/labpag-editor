@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PAG 模板编辑器 - 程序化生成</title>
+    <!-- 使用 SVG 图标避免 404 错误 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🎨</text></svg>">
     <style>
         * {
             margin: 0;
@@ -369,11 +371,8 @@
                 <div id="noLayersMessage" style="color: #999; text-align: center; padding: 20px;">
                     请先上传 PAG 文件
                 </div>
-            </div>
 
-            <!-- 右侧：编辑和预览 -->
-            <div class="panel">
-                <div class="panel-title">✏️ 3. 编辑内容</div>
+                <div class="panel-title" style="margin-top: 30px;">✏️ 3. 编辑内容</div>
                 
                 <!-- 已编辑历史（可折叠） -->
                 <div id="historySection" class="history-section" style="display: none;">
@@ -490,8 +489,11 @@
                 <div id="noSelectionMessage" style="color: #999; text-align: center; padding: 40px;">
                     请从左侧选择要编辑的图层
                 </div>
+            </div>
 
-                <div class="panel-title" style="margin-top: 30px;">👁️ 4. 预览效果</div>
+            <!-- 右侧：预览 -->
+            <div class="panel">
+                <div class="panel-title">👁️ 4. 预览效果</div>
                 
                 <div class="canvas-container" id="canvasContainer">
                     <canvas class="canvas" id="pag"></canvas>
