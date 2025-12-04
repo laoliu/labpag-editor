@@ -1,5 +1,10 @@
 @echo off
 chcp 65001 >nul
+
+REM 加载环境配置
+call "%~dp0setup_env.bat"
+if errorlevel 1 exit /b 1
+
 echo ========================================
 echo  强制重启所有 PAG 服务器
 echo ========================================
@@ -21,15 +26,12 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8000') do (
 )
 timeout /t 2 >nul
 
-REM 设置 PYTHONPATH 指向新版本 pypag（支持 save 功能）
-set "PAG_LIBPATH=H:\work\python\libpag\python\venv\Lib\site-packages"
-
 echo [3/4] 启动导出服务器（新配置：100MB 限制）...
-start "PAG Export Server" cmd /c "set PYTHONPATH=%PAG_LIBPATH% && cd /d h:\work\python\libpag-editor\core && d:\Python312\python.exe pag_export_server.py"
+start "PAG Export Server" cmd /c "set PYTHONPATH=%PAG_LIBPATH% && cd /d %~dp0..\core && %PYTHON% pag_export_server.py"
 timeout /t 3 >nul
 
 echo [4/4] 启动 Web 服务器...
-start "PAG Web Server" cmd /c "cd /d h:\work\python\libpag-editor\web && d:\Python312\python.exe -m http.server 8000"
+start "PAG Web Server" cmd /c "cd /d %~dp0..\web && %PYTHON% -m http.server 8000"
 timeout /t 2 >nul
 
 echo.
