@@ -553,97 +553,97 @@
         </div>
     </div>
 
-    <!-- PAG SDK -->
-    <!-- 
-        ⚠️ 使用本地编译的 libpag.js（包含新 API）
-        将您编译的 libpag.min.js 放在以下任一位置：
-        1. web/lib/libpag.min.js （推荐）
-        2. 或修改下面的 src 路径指向您的文件
-        
-        如果本地文件不存在，会自动降级到 CDN（不包含新 API，会使用画布截图）
-    -->
-    <!-- 使用传统 script 标签加载 libpag (UMD 格式) -->
+
+    <!-- PAG SDK - 使用本地 UMD 文件 -->
+    <!-- 使用 document.write 添加时间戳，防止浏览器缓存旧文件 -->
     <script>
-        // libpag.min.js 是 UMD 格式,会创建全局变量 window.libpag
-        (function() {
-            const libpagSources = [
-                './lib/libpag.min.js',
-                'https://cdn.jsdelivr.net/npm/libpag@latest/lib/libpag.min.js'
-            ];
-            
-            let currentIndex = 0;
-            
-            function loadNextSource() {
-                if (currentIndex >= libpagSources.length) {
-                    console.error('所有 libpag 源都加载失败');
-                    window.dispatchEvent(new CustomEvent('PAGLoadError'));
-                    return;
+        document.write('<script src="./lib/libpag.min.js?' + Date.now() + '"><\/script>');
+    </script>
+    
+    <script>
+        // 等待 libpag 加载完成并初始化
+        (async function() {
+            try {
+                console.log('等待本地 libpag 加载...');
+                
+                // 等待 window.libpag 可用
+                let attempts = 0;
+                while (!window.libpag && attempts < 200) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    attempts++;
                 }
                 
-                const src = libpagSources[currentIndex++];
-                console.log('尝试加载:', src);
+                if (!window.libpag) {
+                    throw new Error('本地 libpag 加载超时（10秒）');
+                }
                 
-                const script = document.createElement('script');
-                script.src = src;
+                console.log('✓ libpag 已加载');
+                console.log('libpag exports:', Object.keys(window.libpag).slice(0, 10).join(', ') + '...');
                 
-                script.onload = async function() {
-                    console.log('脚本已加载:', src);
-                    
-                    // UMD 格式会创建全局变量 window.libpag
-                    if (typeof window.libpag === 'undefined') {
-                        console.warn('window.libpag 未定义，尝试下一个源');
-                        loadNextSource();
-                        return;
+                if (typeof window.libpag.PAGInit !== 'function') {
+                    throw new Error('PAGInit 不是函数: ' + typeof window.libpag.PAGInit);
+                }
+                
+                // 初始化 PAG SDK
+                console.log('开始初始化 PAG SDK...');
+                const PAG = await window.libpag.PAGInit({
+                    locateFile: (file) => {
+                        // 本地 wasm 文件
+                        const url = './lib/' + file;
+                        console.log('locateFile:', file, '->', url);
+                        return url;
                     }
-                    
-                    console.log('检测到 window.libpag');
-                    console.log('libpag keys:', Object.keys(window.libpag));
-                    
-                    const PAGInit = window.libpag.PAGInit;
-                    
-                    if (typeof PAGInit !== 'function') {
-                        console.error('PAGInit 不是函数:', typeof PAGInit);
-                        loadNextSource();
-                        return;
-                    }
-                    
-                    try {
-                        console.log('初始化 PAG SDK...');
-                        
-                        const PAG = await PAGInit({
-                            locateFile: (file) => {
-                                if (file.endsWith('.wasm')) {
-                                    if (src.startsWith('./')) {
-                                        return './lib/' + file;
-                                    }
-                                    return 'https://cdn.jsdelivr.net/npm/libpag@latest/lib/' + file;
-                                }
-                                return file;
-                            }
-                        });
-                        
-                        console.log('PAG SDK 初始化成功!');
-                        console.log('版本:', PAG.SDKVersion ? PAG.SDKVersion() : '未知');
-                        
-                        window.PAG = PAG;
-                        window.dispatchEvent(new CustomEvent('PAGReady'));
-                        
-                    } catch (error) {
-                        console.error('PAG 初始化失败:', error);
-                        window.dispatchEvent(new CustomEvent('PAGLoadError'));
-                    }
-                };
+                });
                 
-                script.onerror = function(error) {
-                    console.warn('脚本加载失败:', src, error);
-                    loadNextSource();
-                };
+                console.log('✓ PAG SDK 初始化成功');
+                if (PAG.SDKVersion) {
+                    console.log('SDK 版本:', PAG.SDKVersion());
+                }
                 
-                document.head.appendChild(script);
+                window.PAG = PAG;
+                window.dispatchEvent(new CustomEvent('PAGReady'));
+                
+            } catch (error) {
+                console.error('❌ PAG 初始化失败:', error);
+                console.error('错误详情:', error.stack);
+                window.dispatchEvent(new CustomEvent('PAGLoadError', { detail: error }));
             }
-            
-            loadNextSource();
         })();
+    </script>
+                
+                if (!window.libpag) {
+                    throw new Error('libpag CDN 加载超时');
+                }
+                
+                console.log('✓ libpag CDN 已加载');
+                console.log('libpag keys:', Object.keys(window.libpag));
+                
+                if (typeof window.libpag.PAGInit !== 'function') {
+                    throw new Error('PAGInit 不是函数: ' + typeof window.libpag.PAGInit);
+                }
+                
+                // 初始化 PAG SDK（CDN 会自动加载 wasm）
+                const PAG = await window.libpag.PAGInit();
+                
+                console.log('✓ PAG SDK 初始化成功');
+                if (PAG.SDKVersion) {
+                    console.log('SDK 版本:', PAG.SDKVersion());
+                }
+                
+                window.PAG = PAG;
+                window.dispatchEvent(new CustomEvent('PAGReady'));
+                
+            } catch (error) {
+                console.error('PAG 初始化失败:', error);
+                console.error('错误详情:', error.stack);
+                window.dispatchEvent(new CustomEvent('PAGLoadError', { detail: error }));
+            }
+        })();
+    </script>
+
+    <script>
+        // 继续保留旧的加载逻辑作为备用（已废弃）
+        // 已被上面的 ES Module 方式替代
     </script>
 
     <script>
