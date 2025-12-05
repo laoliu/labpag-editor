@@ -41,26 +41,46 @@ app.config['JSON_AS_ASCII'] = False  # 支持中文
 # 注意：需要安装 PAG Python SDK
 # pip install libpag
 
+# 优先使用项目本地的 pypag.pyd（包含 Matrix.getTranslateX/Y 等方法）
+import sys
+from pathlib import Path
+
+# 获取项目根目录
+project_root = Path(__file__).parent.parent
+pypag_path = str(project_root / 'pylib')
+
+if pypag_path not in sys.path:
+    sys.path.insert(0, pypag_path)
+    print(f"✅ 添加本地 pypag 路径到 sys.path: {pypag_path}")
+
 PAG_AVAILABLE = False
 PAG_MODULE = None
 IMPORT_ERROR_MSG = ""
 
 try:
-    import libpag
+    import pypag as libpag
     PAG_AVAILABLE = True
     PAG_MODULE = libpag
-    print("✅ 成功导入 libpag")
+    print("✅ 成功导入 pypag (作为 libpag)")
+    print(f"   模块位置: {libpag.__file__ if hasattr(libpag, '__file__') else '内置模块'}")
+    
+    # 验证 Matrix API
+    if hasattr(libpag, 'Matrix'):
+        test_matrix = libpag.Matrix.MakeTrans(100, 200)
+        has_new_api = hasattr(test_matrix, 'getTranslateX')
+        print(f"   Matrix API 状态: {'✅ 新版 (支持 getTranslateX/Y)' if has_new_api else '⚠️ 旧版 (不支持 getTranslateX/Y)'}")
+        if has_new_api:
+            print(f"   测试 Matrix.MakeTrans(100, 200): X={test_matrix.getTranslateX()}, Y={test_matrix.getTranslateY()}")
 except ImportError as e1:
     try:
-        import pypag as libpag
+        import libpag
         PAG_AVAILABLE = True
         PAG_MODULE = libpag
-        print("✅ 成功导入 pypag (作为 libpag)")
-        print(f"   模块位置: {libpag.__file__ if hasattr(libpag, '__file__') else '内置模块'}")
-        print(f"   可用类/函数: {', '.join([x for x in dir(libpag) if not x.startswith('_')][:5])}...")
+        print("✅ 成功导入 libpag (系统安装版)")
+        print(f"   ⚠️ 警告: 系统版本可能不支持新的 Matrix API")
     except ImportError as e2:
         PAG_AVAILABLE = False
-        IMPORT_ERROR_MSG = f"libpag: {str(e1)}, pypag: {str(e2)}"
+        IMPORT_ERROR_MSG = f"pypag: {str(e1)}, libpag: {str(e2)}"
         print("⚠️ 警告：未安装 libpag 或 pypag，将使用模拟模式")
         print(f"   详细错误: {IMPORT_ERROR_MSG}")
 
@@ -204,6 +224,53 @@ def health():
     })
 
 
+@app.route('/api/debug-matrix')
+def debug_matrix():
+    """调试 Matrix API"""
+    try:
+        if not PAG_AVAILABLE:
+            return jsonify({'error': 'PAG SDK 未安装'}), 500
+        
+        # 检查 Matrix 类是否存在
+        matrix_info = {
+            'module_file': libpag.__file__ if hasattr(libpag, '__file__') else 'built-in',
+            'has_Matrix': hasattr(libpag, 'Matrix'),
+        }
+        
+        if hasattr(libpag, 'Matrix'):
+            # 创建一个测试 Matrix
+            try:
+                test_matrix = libpag.Matrix()
+                matrix_methods = [m for m in dir(test_matrix) if not m.startswith('_')]
+                matrix_info['matrix_methods'] = matrix_methods
+                
+                # 测试 MakeTrans
+                if hasattr(libpag.Matrix, 'MakeTrans'):
+                    trans_matrix = libpag.Matrix.MakeTrans(78.0, 104.0)
+                    matrix_info['test_MakeTrans'] = {
+                        'created': True,
+                        'str': str(trans_matrix),
+                        'repr': repr(trans_matrix) if hasattr(trans_matrix, '__repr__') else 'N/A'
+                    }
+                    
+                    # 测试读取方法
+                    if hasattr(trans_matrix, 'getTranslateX'):
+                        matrix_info['test_MakeTrans']['translateX'] = trans_matrix.getTranslateX()
+                        matrix_info['test_MakeTrans']['translateY'] = trans_matrix.getTranslateY()
+                    
+            except Exception as e:
+                matrix_info['matrix_test_error'] = str(e)
+        
+        return jsonify(matrix_info)
+    
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/analyze-layers', methods=['POST'])
 def analyze_layers():
     """
@@ -273,25 +340,77 @@ def analyze_layers():
                                 if hasattr(layer, 'layerName'):
                                     layer_info['name'] = layer.layerName()
                                 
-                                # ✅ 使用新 API 获取原始图层信息
-                                if hasattr(layer, 'getOriginalImageMatrix'):
+                                # ✅ 使用 getTotalMatrix() 获取图层的完整变换矩阵（包括父图层变换）
+                                if hasattr(layer, 'getTotalMatrix'):
+                                    try:
+                                        matrix = layer.getTotalMatrix()
+                                        
+                                        # 使用正确的 Matrix API 获取变换信息
+                                        if hasattr(matrix, 'getTranslateX') and hasattr(matrix, 'getTranslateY'):
+                                            pos_x = matrix.getTranslateX()
+                                            pos_y = matrix.getTranslateY()
+                                            
+                                            layer_info['position'] = {
+                                                'x': float(pos_x),
+                                                'y': float(pos_y)
+                                            }
+                                            
+                                            # 同时获取其他变换信息
+                                            layer_info['matrix_values'] = {
+                                                'translateX': float(pos_x),
+                                                'translateY': float(pos_y),
+                                                'scaleX': float(matrix.getScaleX()) if hasattr(matrix, 'getScaleX') else 1.0,
+                                                'scaleY': float(matrix.getScaleY()) if hasattr(matrix, 'getScaleY') else 1.0,
+                                                'skewX': float(matrix.getSkewX()) if hasattr(matrix, 'getSkewX') else 0.0,
+                                                'skewY': float(matrix.getSkewY()) if hasattr(matrix, 'getSkewY') else 0.0,
+                                            }
+                                            
+                                            print(f"[DEBUG] ✅ 从 getTotalMatrix 获取位置: ({pos_x}, {pos_y})")
+                                            print(f"[DEBUG] Matrix 详情: {layer_info['matrix_values']}")
+                                        else:
+                                            print(f"[DEBUG] ⚠️ Matrix 没有 getTranslateX/Y 方法")
+                                        
+                                    except Exception as e:
+                                        layer_info['matrix_error'] = str(e)
+                                        import traceback
+                                        print(f"[DEBUG] getTotalMatrix 解析错误: {traceback.format_exc()}")
+                                
+                                # 🔄 备用方案：尝试 getOriginalImageMatrix
+                                elif hasattr(layer, 'getOriginalImageMatrix'):
                                     try:
                                         matrix = layer.getOriginalImageMatrix()
-                                        # Matrix 包含变换信息，但是 pybind11 可能不能直接序列化
-                                        # 我们转换为字符串
-                                        layer_info['matrix'] = str(matrix)
+                                        
+                                        if hasattr(matrix, 'getTranslateX') and hasattr(matrix, 'getTranslateY'):
+                                            pos_x = matrix.getTranslateX()
+                                            pos_y = matrix.getTranslateY()
+                                            
+                                            layer_info['position'] = {
+                                                'x': float(pos_x),
+                                                'y': float(pos_y)
+                                            }
+                                            layer_info['matrix_values'] = {
+                                                'translateX': float(pos_x),
+                                                'translateY': float(pos_y),
+                                                'scaleX': float(matrix.getScaleX()) if hasattr(matrix, 'getScaleX') else 1.0,
+                                                'scaleY': float(matrix.getScaleY()) if hasattr(matrix, 'getScaleY') else 1.0,
+                                            }
+                                            print(f"[DEBUG] ⚠️ 使用 getOriginalImageMatrix (备用): ({pos_x}, {pos_y})")
+                                        
                                     except Exception as e:
                                         layer_info['matrix_error'] = str(e)
                                 
                                 if hasattr(layer, 'getOriginalImageBounds'):
                                     try:
                                         bounds = layer.getOriginalImageBounds()
-                                        # 尝试提取边界信息
+                                        # Bounds 提供尺寸信息，但 left/top 通常是 0
+                                        # 真实位置来自 Matrix 的 tx/ty
                                         layer_info['bounds'] = {
-                                            'left': bounds.left if hasattr(bounds, 'left') else None,
-                                            'top': bounds.top if hasattr(bounds, 'top') else None,
-                                            'right': bounds.right if hasattr(bounds, 'right') else None,
-                                            'bottom': bounds.bottom if hasattr(bounds, 'bottom') else None,
+                                            'left': layer_info.get('position', {}).get('x', 0),  # 使用 Matrix 的 tx
+                                            'top': layer_info.get('position', {}).get('y', 0),   # 使用 Matrix 的 ty
+                                            'right': (layer_info.get('position', {}).get('x', 0) + 
+                                                     (bounds.width() if hasattr(bounds, 'width') else 0)),
+                                            'bottom': (layer_info.get('position', {}).get('y', 0) + 
+                                                      (bounds.height() if hasattr(bounds, 'height') else 0)),
                                             'width': bounds.width() if hasattr(bounds, 'width') else None,
                                             'height': bounds.height() if hasattr(bounds, 'height') else None,
                                         }
